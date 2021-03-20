@@ -19,11 +19,13 @@ python -m venv venv
 pip install -r requirements.txt
 ~~~
 
-### 2. 配置 config.py
-这个程序是针对某 able 网站，没有对其它网站进行任何适配。
-
-### 3. 运行 main.py 程序
+### 2. 运行 main.py 程序
+打开命令行，进入 venv，输入
+~~~
+python main.py --url [网址] --num_threads [数字]
+~~~
+即可开始下载。
 
 ## 版本说明
 - 0.0 version
-实现基本的多线程下载，ts 视频合并函数
+实现基本的多线程下载，ts 视频合并功能。

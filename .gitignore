@@ -131,4 +131,5 @@ dmypy.json
 
 # privatre
 *.ts
+*.mp4
 /temp

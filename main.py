@@ -1,8 +1,11 @@
 from downloader import Downloader
-from config import *
+from config import BasicParam  
+# m3u8_url = 'https://qfindg.cdnlab.live/hls/T55YcJQUYYJyAherdoVu2w/1616251687/14000/14383/14383.m3u8'
+# "https://jable.tv/videos/heyzo-2476/"
+# TEMP_FOLDER = 'temp'
 
-m3u8_url = 'https://qfindg.cdnlab.live/hls/bJMVBuk9PyBQSU8JJwl3vw/1616248980/14000/14356/14356.m3u8'
+arg = BasicParam()
+opt = arg.return_param()
 
-
-dl = Downloader(m3u8_url,8)
+dl = Downloader(opt)
 dl.run()

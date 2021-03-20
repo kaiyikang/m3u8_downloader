@@ -6,9 +6,13 @@ import shutil
 import time
 import threading
 import random
+import sys
 from tqdm import tqdm
+from natsort import natsorted
 from Crypto.Cipher import AES
 from fake_useragent import UserAgent
+from bs4 import BeautifulSoup
+
 # private packages
 from config import *
 
@@ -43,21 +47,46 @@ def random_proxies():
 
 class Downloader():
     
-    def __init__(self, m3u8_url, num_threads = 4, temp_folder='./temp'):
-        self.m3u8_url = m3u8_url
-        self.temp_folder = temp_folder
-        self.num_threads = num_threads
+    def __init__(self, opt=None):
+        if not opt: raise Exception('No configurations!')
+        self.url = opt['url']
+        self.num_threads = int(opt['num_threads'])
+        self.is_proxy = opt['is_proxy']
         
+        self.url_parser(opt['url'])
         self.prepare_env()
         self.get_meta_info()
         self.multi_files()
         
+    def url_parser(self,url):
+        
+        data = self.get_url_content(url)
+        soup = BeautifulSoup(data, 'html.parser')
+        # 影片名称 = 临时文件夹名称
+        self.ts_name = soup.title.text.split('- ')[0].strip()
+        print('>> moive id: ',soup.title.text.split()[0])
+        
+        self.m3u8_url = ""
+        for link in soup.find_all('link')[::-1]:
+            if "m3u8" in link['href']:
+                self.m3u8_url = link['href']
+                break
+
+        
     def run(self):
-        """ 多线程管理器
+        """ 主入口：开启多线程
         """
+        self.is_threads_done = [False] * self.num_threads
         for i in range(self.num_threads):
             t = threading.Thread(target=self.single_run, args=(i,))
             t.start()
+        
+        # 如果不是全 True， 说明有进程没有完，等待
+        while not all(self.is_threads_done): pass
+        # 合并文件        
+        self.merge_ts()
+        # 退出程序
+        sys.exit()
 
 
     def single_run(self,i):
@@ -68,16 +97,19 @@ class Downloader():
         """
         test = 0
         total = len(self.mul_video_files[i])
-
+        time.sleep(i)
         pbar = tqdm(total=total, position=i)
+        
         for file_name in self.mul_video_files[i]:
             single_ts_url = self.pure_url + '/' + file_name
-            self.video_saver_(single_ts_url)
+            self.video_saver(single_ts_url)
             pbar.update(1)
             test += 1
             # if test == 10: break
-        # print(i,' threads done')
-    
+        
+        # 该线程完成
+        self.is_threads_done[i] = True
+        
     
     def multi_files(self):
         length = len(self.video_files)
@@ -90,13 +122,31 @@ class Downloader():
     def prepare_env(self):
         folder_path = os.path.abspath('.')
         # 创建保存的根目录
-        self.root_path = os.path.join(folder_path, self.temp_folder)
-        if os.path.exists(self.root_path):
-            print('>> 发现同名路径{}，删除并创建新的'.format(self.root_path))
-            shutil.rmtree(self.root_path)
+        self.temp_path = os.path.join(folder_path, self.ts_name)
+        if os.path.exists(self.temp_path):
+            print('>> 发现同名路径 {}，删除并创建新的'.format(self.temp_path))
+            shutil.rmtree(self.temp_path)
         time.sleep(1)
-        os.makedirs(self.root_path)
+        os.makedirs(self.temp_path)
         
+    def merge_ts(self):
+        # 合并完的文件路径
+        self.ts_file = os.path.join('.',self.ts_name + '.mp4')
+        ts_files=[self.temp_path+'\{}.ts'.format(str(ij)) for ij in natsorted([int(str_1[:str_1.find('.')]) for str_1 in os.listdir(self.temp_path)])]
+        
+        print(">> 完成下载，准备合并文件")
+        pbar = tqdm(total=len(ts_files))
+        for ts_files in ts_files:
+            pbar.update(1)
+            with open(file=ts_files,mode='rb') as f:
+                content=f.read()
+            with open(file=self.ts_file ,mode='ab') as fp:
+                fp.write(content)
+        
+        if os.path.exists(self.temp_path):
+            print('>> 完成合并，删除 {} 文件夹'.format(self.temp_path))
+            shutil.rmtree(self.temp_path)
+            
 
     def get_meta_info(self):
         """
@@ -140,21 +190,25 @@ class Downloader():
         pass
         
         
-    def video_saver_(self, video_url):
+    def video_saver(self, video_url):
         file_name = video_url.split('/')[-1]
         data = self.get_url_content(video_url)
         plain_data = self.decoder.decrypt(data) 
-        with open(os.path.join(self.root_path, file_name),'wb')as f:
+        with open(os.path.join(self.temp_path, file_name),'wb')as f:
             f.write(plain_data)
             
     
-    def get_url_content(self,url):        
-        response = requests.get(url, headers=random_headers(), proxies=random_proxies(),  timeout=5)
+    def get_url_content(self,url):
+        # 是否开启代理
+        if self.is_proxy: proxies = random_proxies()
+        else: proxies = None 
+        
+        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=5)
         data = response.content
 
         # 如果错误发生，则循环持续requests
         while len(data) == 552:
-            response = requests.get(url, headers=random_headers(), proxies=random_proxies(), timeout=5)
+            response = requests.get(url, headers=random_headers(), proxies=proxies, timeout=5)
             data = response.content
             time.sleep(1)
               
@@ -174,8 +228,8 @@ class Downloader():
 
 
 def test():
-    m3u8_url = 'https://qfindg.cdnlab.live/hls/bJMVBuk9PyBQSU8JJwl3vw/1616248980/14000/14356/14356.m3u8'
-    dl = Downloader(m3u8_url,16)
+    m3u8_url = 'https://qsdhc7.cdnlab.live/hls/rQXP99ZDzx1Hq0wd0qJcKQ/1616263595/14000/14267/14267.m3u8'
+    dl = Downloader(m3u8_url,4)
     dl.run()
 
 if __name__ == "__main__":
