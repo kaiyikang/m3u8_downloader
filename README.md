@@ -19,9 +19,10 @@ python -m venv venv
 pip install -r requirements.txt
 ~~~
 
-### 2. 找到 u3m8 
+### 2. 配置 config.py
 这个程序是针对某 able 网站，没有对其它网站进行任何适配。
 
+### 3. 运行 main.py 程序
 
 ## 版本说明
 - 0.0 version

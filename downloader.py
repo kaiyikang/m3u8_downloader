@@ -5,22 +5,52 @@ import os
 import shutil
 import time
 import threading
+import random
 from tqdm import tqdm
 from Crypto.Cipher import AES
-
+from fake_useragent import UserAgent
 # private packages
-from config import headers
+from config import *
 
-m3u8_url = 'https://qfindg.cdnlab.live/hls/bJMVBuk9PyBQSU8JJwl3vw/1616248980/14000/14356/14356.m3u8'
+# local header information
+# headers = {
+#     'Origin': 'https://www.shiguangkey.com',
+#     'Referer': 'https://www.shiguangkey.com/video/2321?videoId=40168&classId=4179&playback=1',
+#     'Sec-Fetch-Mode': 'cors',
+#     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'
+# }
+
+def random_headers():
+    
+    headers = [{'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'},
+               {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36"}
+               ]
+    return random.choice(headers)
+    
+
+def random_proxies():
+    proxy = ['51.158.165.18:8761',
+             '47.242.255.170:7071',
+             '62.210.203.211:8080']
+    proxy = random.choice(proxy)
+    proxies = {
+        "http": "http://%(proxy)s/" % {'proxy': proxy},
+       
+    }
+    #  "https": "http://%(proxy)s/" % {'proxy': proxy}
+    return proxies
+
 
 class Downloader():
     
-    def __init__(self, m3u8_url, num_threads = 4):
+    def __init__(self, m3u8_url, num_threads = 4, temp_folder='./temp'):
         self.m3u8_url = m3u8_url
+        self.temp_folder = temp_folder
         self.num_threads = num_threads
+        
         self.prepare_env()
         self.get_meta_info()
-        self.multi_files(num_threads)
+        self.multi_files()
         
     def run(self):
         """ 多线程管理器
@@ -29,8 +59,7 @@ class Downloader():
             t = threading.Thread(target=self.single_run, args=(i,))
             t.start()
 
-        
-        
+
     def single_run(self,i):
         """每个线程内的主函数
 
@@ -50,23 +79,23 @@ class Downloader():
         # print(i,' threads done')
     
     
-    def multi_files(self, num_threads):
+    def multi_files(self):
         length = len(self.video_files)
-        step = int(length / num_threads) + 1
+        step = int(length / self.num_threads) + 1
         self.mul_video_files = []
         for i in range(0, length, step):
             self.mul_video_files.append(self.video_files[i: i + step])
 
             
-    def prepare_env(self, folder_name = "temp"):
+    def prepare_env(self):
         folder_path = os.path.abspath('.')
         # 创建保存的根目录
-        self.root_path = os.path.join(folder_path, folder_name)
+        self.root_path = os.path.join(folder_path, self.temp_folder)
         if os.path.exists(self.root_path):
+            print('>> 发现同名路径{}，删除并创建新的'.format(self.root_path))
             shutil.rmtree(self.root_path)
         time.sleep(1)
         os.makedirs(self.root_path)
-        print('>> Create root path')
         
 
     def get_meta_info(self):
@@ -120,14 +149,14 @@ class Downloader():
             
     
     def get_url_content(self,url):        
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=random_headers(), proxies=random_proxies(),  timeout=5)
         data = response.content
 
         # 如果错误发生，则循环持续requests
         while len(data) == 552:
-            response = requests.get(url, headers=headers,timeout=5)
+            response = requests.get(url, headers=random_headers(), proxies=random_proxies(), timeout=5)
             data = response.content
-            time.sleep(5)
+            time.sleep(1)
               
         return data
         
@@ -144,9 +173,10 @@ class Downloader():
         return bytes.fromhex(key_iv)
 
 
-def main():
-    dl = Downloader(m3u8_url,8)
+def test():
+    m3u8_url = 'https://qfindg.cdnlab.live/hls/bJMVBuk9PyBQSU8JJwl3vw/1616248980/14000/14356/14356.m3u8'
+    dl = Downloader(m3u8_url,16)
     dl.run()
 
 if __name__ == "__main__":
-    main()
+    test()
