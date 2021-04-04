@@ -131,7 +131,7 @@ class Downloader():
         
     def merge_ts(self):
         # 合并完的文件路径
-        self.ts_file = os.path.join('.',self.ts_name + '.mp4')
+        self.ts_file = os.path.join('.',self.ts_name + '.ts')
         ts_files=[self.temp_path+'\{}.ts'.format(str(ij)) for ij in natsorted([int(str_1[:str_1.find('.')]) for str_1 in os.listdir(self.temp_path)])]
         
         print(">> 完成下载，准备合并文件")
@@ -203,12 +203,12 @@ class Downloader():
         if self.is_proxy: proxies = random_proxies()
         else: proxies = None 
         
-        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=5)
+        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=60)
         data = response.content
 
         # 如果错误发生，则循环持续requests
         while len(data) == 552:
-            response = requests.get(url, headers=random_headers(), proxies=proxies, timeout=5)
+            response = requests.get(url, headers=random_headers(), proxies=proxies, timeout=60)
             data = response.content
             time.sleep(1)
               
