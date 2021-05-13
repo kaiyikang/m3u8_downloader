@@ -59,6 +59,9 @@ class Downloader():
         self.get_meta_info() # 关键步骤，获得解码器
         self.multi_files()
         
+        # 尝试的次数。次数越多，每次video_error_block的数量越少。
+        self.get_error_count = 10
+        
     def url_parser(self,url):
         """读取url中的源码，并进行解析与基本文件和目录的初始化
 
@@ -87,6 +90,7 @@ class Downloader():
         """
         # 标记开始时间
         time_start=time.time()
+        print('- 开始下载 ...')
           
         thread_list = []
         for i in range(self.num_threads):
@@ -99,8 +103,10 @@ class Downloader():
 
         for t in thread_list:
             t.join()
+            
+        # 打印总时间，别忘记加空行，空行数等于 num_threads
+        print('- 下载结束！总共用时: ',time.time()-time_start,'s')    
         
-        print('- total time: ',time.time()-time_start,'s')    
         # 合并文件        
         self.merge_ts()
         
@@ -119,18 +125,33 @@ class Downloader():
         """
         # test = 0
         total = len(self.mul_video_files[i])
-        time.sleep(i)
-        pbar = tqdm(total=total, position=i)
+        # time.sleep(i)
         
+        # 初始化未完成 list
+        not_done_lst = set() 
+        
+        pbar = tqdm(total=total, position=i)
         for file_name in self.mul_video_files[i]:
             single_ts_url = self.pure_url + '/' + file_name
-            self.video_saver(single_ts_url)
-            pbar.update(1)
+            # 如果下载失败，存入未完成list
+            if not self.video_saver(single_ts_url):
+                not_done_lst.add(single_ts_url)
+            else: # 成功
+                pbar.update(1)
             # test += 1
-            # if test == 10: break
-        
-        
-        
+            # if test == 10: break 
+
+        # 循环统一处理未完成的内容  
+
+        while not_done_lst:
+            for single_ts_url in not_done_lst.copy():
+                if self.video_saver(single_ts_url):
+                   not_done_lst.remove(single_ts_url) 
+            
+        pbar.clear()   
+        pbar.close()
+
+
     
     def multi_files(self):
         """视频块list，根据线程的数量进行分组
@@ -172,7 +193,7 @@ class Downloader():
         self.ts_file = os.path.join('.',self.ts_name + '.ts')
         ts_files=[self.temp_path+'\{}.ts'.format(str(ij)) for ij in natsorted([int(str_1[:str_1.find('.')]) for str_1 in os.listdir(self.temp_path)])]
         
-        print(">> 完成下载，准备合并文件")
+        print("- 准备合并文件")
         pbar = tqdm(total=len(ts_files))
         for ts_files in ts_files:
             pbar.update(1)
@@ -183,7 +204,7 @@ class Downloader():
     
     def reset_env(self):
         if os.path.exists(self.temp_path):
-            print('>> 完成合并，删除 {} 文件夹'.format(self.temp_path))
+            print('- 完成合并，删除 {} 文件夹'.format(self.temp_path))
             shutil.rmtree(self.temp_path)
             
 
@@ -239,12 +260,17 @@ class Downloader():
 
         Args:
             video_url (string): 视频块的连接
+        Return:
+            bool: 成功 or 失败
         """
         # 获取视频名字
         file_name = video_url.split('/')[-1]
         
         # 获得数据
         data = self.get_url_content(video_url)
+        
+        # 如果数据获取失败，返回 False
+        if data == False: return False
         
         # 根据解码器，解析数据
         plain_data = self.decoder.decrypt(data) 
@@ -253,6 +279,7 @@ class Downloader():
         with open(os.path.join(self.temp_path, file_name),'wb')as f:
             f.write(plain_data)
             
+        return True
     
     def get_url_content(self,url):
         """通过给定链接，获得 url 中的原始内容
@@ -268,16 +295,20 @@ class Downloader():
         else: proxies = None 
         
         # 发送 get 请求，获得响应
-        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=60)
+        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=50)
         
         # 提取响应的信息
         data = response.content
 
         # 如果错误发生，则循环持续requests #TODO 不同网站，错误情况不一样，这里需要分情况讨论
-        while len(data) == 552:
+        while len(data) == 552 and self.get_error_count != 0:
             response = requests.get(url, headers=random_headers(), proxies=proxies, timeout=60)
             data = response.content
             time.sleep(1)
+            self.get_error_count -= 1
+
+        # 如果最终还是错误发生，返回 False
+        if len(data) == 552: return False
               
         return data
         
