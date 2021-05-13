@@ -117,7 +117,7 @@ class Downloader():
         Args:
             i (int): 第几号线程
         """
-        test = 0
+        # test = 0
         total = len(self.mul_video_files[i])
         time.sleep(i)
         pbar = tqdm(total=total, position=i)
@@ -126,11 +126,10 @@ class Downloader():
             single_ts_url = self.pure_url + '/' + file_name
             self.video_saver(single_ts_url)
             pbar.update(1)
-            test += 1
+            # test += 1
             # if test == 10: break
         
-        # 该线程完成
-        # self.is_threads_done[i] = True
+        
         
     
     def multi_files(self):
@@ -249,6 +248,8 @@ class Downloader():
         
         # 根据解码器，解析数据
         plain_data = self.decoder.decrypt(data) 
+        
+        # 存储数据
         with open(os.path.join(self.temp_path, file_name),'wb')as f:
             f.write(plain_data)
             
