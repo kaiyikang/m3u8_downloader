@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 
 # private packages
 from config import *
+# requests.adapters.DEFAULT_RETRIES = 5
 
 # local header information
 # headers = {
@@ -59,8 +60,7 @@ class Downloader():
         self.get_meta_info() # 关键步骤，获得解码器
         self.multi_files()
         
-        # 尝试的次数。次数越多，每次video_error_block的数量越少。
-        self.get_error_count = 10
+        self.get_error_count = 5
         
     def url_parser(self,url):
         """读取url中的源码，并进行解析与基本文件和目录的初始化
@@ -127,17 +127,20 @@ class Downloader():
         total = len(self.mul_video_files[i])
         # time.sleep(i)
         
-        # 初始化未完成 list
+        # # 初始化未完成 list
         not_done_lst = set() 
         
         pbar = tqdm(total=total, position=i)
         for file_name in self.mul_video_files[i]:
             single_ts_url = self.pure_url + '/' + file_name
+            # self.video_saver(single_ts_url)
+            # pbar.update(1)
             # 如果下载失败，存入未完成list
             if not self.video_saver(single_ts_url):
                 not_done_lst.add(single_ts_url)
             else: # 成功
                 pbar.update(1)
+            
             # test += 1
             # if test == 10: break 
 
@@ -223,25 +226,29 @@ class Downloader():
         
         # 获得 meta key 值，以用作之后解析
         for key in self.meta_info.keys:
+            key_uri = None 
             if key:  # First one could be None
                 key_uri = key.uri
                 key_method = key.method
                 key_iv = key.iv
                 break
         
-        # 获取 key url
-        key_url = self.pure_url + '/' + key_uri
-        key = self.get_url_content(key_url)
-        
-        # 获取 key iv
-        key_iv = self.hexStringTobytes(key_iv)
-        
-        print("- Key_url: ",key_url)
-        print("- Key: ",key)
-        print("- Key_iv: ",key_iv)
+        if key_uri:
+            # 获取 key url
+            key_url = self.pure_url + '/' + key_uri
+            key = self.get_url_content(key_url)
+            
+            # 获取 key iv
+            key_iv = self.hexStringTobytes(key_iv)
+            
+            print("- Key_url: ",key_url)
+            print("- Key: ",key)
+            print("- Key_iv: ",key_iv)
 
-        # 通过 key 信息获得解码器
-        self.decoder = AES.new(key, AES.MODE_CBC, iv=key_iv)
+            # 通过 key 信息获得解码器
+            self.decoder = AES.new(key, AES.MODE_CBC, iv=key_iv)
+        else:
+            self.decoder = None
         
         
     def get_decoder_(self, data, key, iv):
@@ -273,11 +280,12 @@ class Downloader():
         if data == False: return False
         
         # 根据解码器，解析数据
-        plain_data = self.decoder.decrypt(data) 
+        if self.decoder:
+            data = self.decoder.decrypt(data)
         
         # 存储数据
         with open(os.path.join(self.temp_path, file_name),'wb')as f:
-            f.write(plain_data)
+            f.write(data)
             
         return True
     
@@ -295,8 +303,20 @@ class Downloader():
         else: proxies = None 
         
         # 发送 get 请求，获得响应
-        response = requests.get(url, headers=random_headers(), proxies=proxies,  timeout=50)
-        
+        while True:
+            try:
+                response = requests.get(url, headers=random_headers(), proxies=proxies)
+                break
+            except requests.exceptions.ConnectionError:
+                print('ConnectionError -- please wait 3 seconds')
+                time.sleep(3)
+            except requests.exceptions.ChunkedEncodingError:
+                print('ChunkedEncodingError -- please wait 3 seconds')
+                time.sleep(3)    
+            except:
+                print('Unfortunitely -- An Unknow Error Happened, Please wait 3 seconds')
+                time.sleep(3)
+
         # 提取响应的信息
         data = response.content
 
@@ -326,8 +346,10 @@ class Downloader():
 
 
 def test():
-    m3u8_url = 'https://qsdhc7.cdnlab.live/hls/rQXP99ZDzx1Hq0wd0qJcKQ/1616263595/14000/14267/14267.m3u8'
-    dl = Downloader(m3u8_url,4)
+    opt = {'url':'https://jable.tv/videos/ipx-176/',
+           'num_threads':4,
+           'is_proxy':False}
+    dl = Downloader(opt)
     dl.run()
 
 if __name__ == "__main__":

@@ -10,7 +10,9 @@ from config import BasicParam
 arg = BasicParam()
 # load para from consoles
 opt = arg.return_param()
+
 # init downloader
 dl = Downloader(opt)
+
 # run it
 dl.run()
